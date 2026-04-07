@@ -33,7 +33,7 @@ public class UserDAO {
         return null;
     }
 
-    // Đăng ký khách hàng (xử lý transaction đúng cách)
+    // Đăng ký khách hàng 
     public boolean registerCustomer(String username, String password, String fullName,
                                     String email, String phone, String address) {
         if (isUsernameExists(username)) {
@@ -47,7 +47,7 @@ public class UserDAO {
         ResultSet rs = null;
         try {
             conn = DBConnection.getConnection();
-            conn.setAutoCommit(false);  // Bắt đầu transaction
+            conn.setAutoCommit(false);  
 
             ps = conn.prepareStatement(sqlUser, Statement.RETURN_GENERATED_KEYS);
             ps.setString(1, username);
@@ -68,7 +68,7 @@ public class UserDAO {
                 customer.setUserId(userId);
                 customer.setAddress(address);
                 customer.setMembershipLevel("Standard");
-                // Dùng chính connection này để thêm customer (tránh mở connection riêng)
+               
                 if (addCustomerWithConnection(conn, customer)) {
                     conn.commit();
                     return true;
@@ -94,14 +94,14 @@ public class UserDAO {
             try { if (ps != null) ps.close(); } catch (SQLException e) {}
             try {
                 if (conn != null) {
-                    conn.setAutoCommit(true);  // Trả về chế độ mặc định
+                    conn.setAutoCommit(true);  
                     conn.close();
                 }
             } catch (SQLException e) {}
         }
     }
 
-    // Hàm riêng để thêm customer dùng chung connection (tham gia transaction)
+    // Hàm riêng để thêm customer dùng chung connection 
     private boolean addCustomerWithConnection(Connection conn, Customer customer) {
         String sql = "INSERT INTO customers (user_id, address, membership_level) VALUES (?, ?, ?)";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -115,7 +115,7 @@ public class UserDAO {
         }
     }
 
-    // Kiểm tra username tồn tại (nếu lỗi kết nối, trả false để cho phép thử)
+    // Kiểm tra username tồn tại hay chưa
     private boolean isUsernameExists(String username) {
         String sql = "SELECT 1 FROM users WHERE username = ?";
         try (Connection conn = DBConnection.getConnection();
@@ -126,7 +126,7 @@ public class UserDAO {
             }
         } catch (SQLException e) {
             e.printStackTrace();
-            return false;   // Quan trọng: không trả true khi lỗi kết nối
+            return false;   
         }
     }
 }

@@ -2,8 +2,12 @@ package toi.run;
 
 import toi.dao.*;
 import toi.model.*;
-import java.util.List;
-import java.util.Scanner;
+import toi.database.DBConnection;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.util.*;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 
 public class Main {
 
@@ -30,9 +34,9 @@ public class Main {
  //ok   //2. qlkhach(toi) CRUD -  cái này là qtv có quyền CRUD 
  //ok   //3. qlnhanvien (nhất) - CRUD  cái này là qtv có quyền CRUD 
  //ok   //4. qldichvu CRUD (đạt) - cái này là qtv có quyền CRUD  
- //ok   //5. đặt thêm dichvu  của Đạt xong ròi ma chua ghep , 
- //ok   //6. qldsphong(hùng)  - đang làm
- //loading   //7. ql dặt phòng phía khách hàng (tới) - đang làm
+ //ok   //5. đặt thêm dịch vụ  của Đạt xong ròi ma chua ghep , 
+ //ok   //6. ql danh sách phong(hùng)  - ok
+ //ok   //7. ql dặt phòng phía khách hàng (tới) 
  //loading   //8. ql hóa đơn CRUD nhất - đang làm
  //loading   //9. đánh giá trải nghiệm (nhất) - đang làm
  //loading   //10. thống kê doanh thu (tạm tính khi đã xuất hóa đơn) (all) - đang làm
@@ -180,14 +184,14 @@ private static void themPhong(RoomDAO dao) {
     dao.addRoom(room);
 }
 
-private static void hienThiDanhSachPhong(RoomDAO dao) {
+private static void hienThiDanhSachPhongList(RoomDAO dao) {
     List<Room> list = dao.getAllRooms();
     if (list.isEmpty()) {
         System.out.println("Danh sách phòng hiện tại trống.");
         return;
     }
     System.out.println("\n========================================================================================================================");
-    System.out.printf("%-5s %-15s %-20s %-12s %-12s %-40s%n", "ID", "Số phòng", "Loại phòng", "Giá (VND)", "Trạng thái", "Mô tả");
+    System.out.printf("%-5s %-15s %-20s %-12s %-12s %-40s%n", "ID", "Số phòng", "Loại phòng", "Giá/1 đêm (VND)", "Trạng thái", "Mô tả");
     System.out.println("------------------------------------------------------------------------------------------------------------------------");
     for (Room r : list) {
         System.out.printf("%-5d %-15s %-20s %-12.2f %-12s %-40s%n",
@@ -230,14 +234,13 @@ private static void xoaPhong(RoomDAO dao) {
 private static double getDoubleInput() {
     while (true) {
         try {
-            return Double.parseDouble(sc.nextLine());
+            return Double.parseDouble(sc.nextLine().trim());
         } catch (NumberFormatException e) {
             System.out.print("Vui lòng nhập số thực hợp lệ: ");
         }
     }
 }
-
-    // ========== CASE QUẢN LÝ KHÁCH HÀNG quyền (ADMIN) ==========
+    // ==========  QUẢN LÝ KHÁCH HÀNG quyền Admin ==========
     private static void manageCustomers() {
         CustomerDAO dao = new CustomerDAO();
         while (true) {
@@ -309,42 +312,235 @@ private static double getDoubleInput() {
 
     // ========== MENU KHÁCH HÀNG quyền khách ==========
     private static void showCustomerMenu() {
+        RoomDAO roomDAO = new RoomDAO(); // Tạo đối tượng RoomDAO
         while (true) {
             System.out.println("\n===== MENU KHÁCH HÀNG =====");
-            System.out.println("1. Xem danh sách phòng trống");
-            System.out.println("2. Đặt phòng (CRUD)");
-            System.out.println("3. Xem danh sách dịch vụ");
-            System.out.println("4. Đặt dịch vụ (thêm/xóa)");
-            System.out.println("5. Xem hóa đơn của tôi");
+            System.out.println("1. Đặt phòng (CRUD)");
+            // Thêm lựa chọn mới
             System.out.println("0. Đăng xuất");
             System.out.print("=> Chọn: ");
             int choice = getIntInput();
             switch (choice) {
-                case 1: System.out.println("Chức năng xem phòng trống đang phát triển."); break;
-                case 2: manageBooking(); break;
-                case 3: System.out.println("Chức năng xem dịch vụ đang phát triển."); break;
-                case 4: manageServiceBooking(); break;
-                case 5: viewMyInvoices(); break;
-                case 0: loggedUser = null; System.out.println("Đã đăng xuất."); return;
-                default: System.out.println("Lựa chọn không hợp lệ!");
+                case 1: 
+                    try {
+                        Connection conn = DBConnection.getConnection(); // Lấy đối tượng Connection
+                        BookingDAO bookingDAO = new BookingDAO(conn); // Tạo đối tượng BookingDAO
+                        manageBooking(roomDAO, bookingDAO); // Gọi phương thức manageBooking
+                    } catch (SQLException e) {
+                        System.out.println("Lỗi kết nối cơ sở dữ liệu: " + e.getMessage());
+                    }
+                    break;
+                case 0: 
+                    loggedUser = null; 
+                    System.out.println("=> Đã đăng xuất khỏi hệ thống");
+                    return;
+                default: 
+                    System.out.println("---ERROR-- Lựa chọn không hợp lệ! --ERROR---");
             }
         }
     }
 
     // Các hàm giả lập cho khách hàng
-    private static void manageBooking() {
-        System.out.println("Chức năng đặt phòng (CRUD) đang phát triển.");
+    // private static void manageBooking() {
+    //     System.out.println("Chức năng đặt phòng (CRUD) đang phát triển.");
+    // }
+
+    private static void manageBooking(RoomDAO roomDAO, BookingDAO bookingDAO) throws SQLException {
+        while (true) {
+            System.out.println("\n=== Quản Lý Đặt Phòng ===");
+            System.out.println("1. Xem tất cả phòng");
+            System.out.println("2. Đặt phòng mới");
+            System.out.println("3. Sửa đặt phòng");
+            System.out.println("4. Xem lại đặt phòng");
+            System.out.println("5. Quay lại");
+            System.out.print("Nhập lựa chọn của bạn: ");
+            int choice = getIntInput();
+    
+            switch (choice) {
+                case 1:
+                    hienThiDanhSachPhong(roomDAO);
+                    break;
+                case 2:
+                    datPhongMoi(roomDAO, bookingDAO);
+                    break;
+                case 3:
+                    suaDatPhong(roomDAO, bookingDAO);
+                    break;
+                case 4:
+                    xemLaiDatPhong(bookingDAO);
+                    break;
+                case 5:
+                    return;
+                default:
+                    System.out.println("Lựa chọn không hợp lệ. Vui lòng thử lại.");
+            }
+        }
     }
 
-    private static void manageServiceBooking() {
-        System.out.println("Chức năng đặt dịch vụ (thêm/xóa) đang phát triển.");
+
+    private static void datPhongMoi(RoomDAO roomDAO, BookingDAO bookingDAO) throws SQLException {
+        System.out.print("Nhập ID phòng muốn đặt: ");
+        int roomId = getIntInput();
+        Room room = roomDAO.getRoomById(roomId);
+    
+        if (room == null || !room.getStatus().equalsIgnoreCase("available")) {
+            System.out.println("Phòng không tồn tại hoặc không khả dụng.");
+            return;
+        }
+    
+        System.out.print("Nhập ngày nhận phòng (yyyy-MM-dd): ");
+        String checkInDateStr = sc.nextLine();
+        System.out.print("Nhập ngày trả phòng (yyyy-MM-dd): ");
+        String checkOutDateStr = sc.nextLine();
+    
+        // Chuyển đổi chuỗi sang Date
+        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd");
+        Date checkInDate;
+        Date checkOutDate;
+        try {
+            checkInDate = dateFormat.parse(checkInDateStr);
+            checkOutDate = dateFormat.parse(checkOutDateStr);
+        } catch (ParseException e) {
+            System.out.println("Định dạng ngày không hợp lệ. Vui lòng nhập theo định dạng yyyy-MM-dd.");
+            return;
+        }
+    
+        // Tính số ngày ở
+        long diffInMillies = checkOutDate.getTime() - checkInDate.getTime();
+        long numberOfDays = diffInMillies / (1000 * 60 * 60 * 24); // Chuyển đổi từ milliseconds sang ngày
+    
+        if (numberOfDays <= 0) {
+            System.out.println("Ngày trả phòng phải sau ngày nhận phòng.");
+            return;
+        }
+    
+        // Tính tổng giá tiền
+        double totalPrice = numberOfDays * room.getPrice();
+    
+        // Tạo đối tượng Booking và lưu vào cơ sở dữ liệu
+        Booking booking = new Booking(0, loggedUser.getId(), roomId, checkInDate, checkOutDate, totalPrice, "confirmed");
+        bookingDAO.addBooking(booking);
+        room.setStatus("booked");
+        System.out.println("Đặt phòng thành công!");
+        System.out.printf("Phòng đã đặt trong %d ngày. Tổng tiền tạm tính: %.2f VND%n", numberOfDays, totalPrice);
     }
 
-    private static void viewMyInvoices() {
-        System.out.println("Chức năng xem hóa đơn của tôi đang phát triển.");
+    private static void suaDatPhong(RoomDAO roomDAO, BookingDAO bookingDAO) throws SQLException {
+        System.out.print("Nhập ID đặt phòng cần sửa: ");
+        int bookingId = getIntInput();
+        Booking booking = bookingDAO.getBookingById(bookingId);
+    
+        if (booking == null || booking.getUserId() != loggedUser.getId()) {
+            System.out.println("Không tìm thấy đặt phòng hoặc bạn không có quyền sửa.");
+            return;
+        }
+    
+        System.out.print("Nhập ID phòng mới: ");
+        int newRoomId = getIntInput();
+        Room newRoom = roomDAO.getRoomById(newRoomId);
+    
+        if (newRoom == null || !newRoom.getStatus().equalsIgnoreCase("available")) {
+            System.out.println("Phòng không tồn tại hoặc không khả dụng.");
+            return;
+        }
+    
+        System.out.print("Nhập ngày nhận phòng mới (yyyy-MM-dd): ");
+        String checkInDateStr = sc.nextLine();
+        System.out.print("Nhập ngày trả phòng mới (yyyy-MM-dd): ");
+        String checkOutDateStr = sc.nextLine();
+    
+        // Chuyển đổi chuỗi sang Date
+        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd");
+        Date checkInDate;
+        Date checkOutDate;
+        try {
+            checkInDate = dateFormat.parse(checkInDateStr);
+            checkOutDate = dateFormat.parse(checkOutDateStr);
+        } catch (ParseException e) {
+            System.out.println("Định dạng ngày không hợp lệ. Vui lòng nhập theo định dạng yyyy-MM-dd.");
+            return;
+        }
+    
+        // Tính số ngày ở
+        long diffInMillies = checkOutDate.getTime() - checkInDate.getTime();
+        long numberOfDays = diffInMillies / (1000 * 60 * 60 * 24); // Chuyển đổi từ milliseconds sang ngày
+    
+        if (numberOfDays <= 0) {
+            System.out.println("Ngày trả phòng phải sau ngày nhận phòng.");
+            return;
+        }
+    
+        // Tính tổng giá tiền
+        double totalPrice = numberOfDays * newRoom.getPrice();
+    
+        // Cập nhật thông tin đặt phòng
+        booking.setRoomId(newRoomId);
+        booking.setCheckInDate(checkInDate);
+        booking.setCheckOutDate(checkOutDate);
+        booking.setTotalPrice(totalPrice);
+        bookingDAO.updateBooking(booking);
+    
+        // Cập nhật trạng thái phòng
+        newRoom.setStatus("booked");
+        System.out.println("Cập nhật đặt phòng thành công!");
+        System.out.printf("Phòng đã cập nhật trong %d ngày. Tổng tiền tạm tính: %.2f VND%n", numberOfDays, totalPrice);
+    }
+    private static void xemLaiDatPhong(BookingDAO bookingDAO) throws SQLException {
+        List<Booking> bookings = bookingDAO.getBookingsByUserId(loggedUser.getId());
+        if (bookings.isEmpty()) {
+            System.out.println("Bạn chưa có đặt phòng nào.");
+            return;
+        }
+    
+        System.out.println("\n          === Danh Sách Đặt Phòng ===");
+        System.out.printf("%-5s %-10s %-15s %-15s %-10s %-10s%n", "STT", "ID_Phòng", "Check-In", "Check-Out", "Tạm tính", "Trạng thái");
+        for (Booking booking : bookings) {
+            System.out.printf("%-5d %-10d %-15s %-15s %-10.2f %-10s%n",
+                    booking.getId(), booking.getRoomId(), booking.getCheckInDate(),
+                    booking.getCheckOutDate(), booking.getTotalPrice(), booking.getStatus());
+        }
+    }
+    private static void hienThiDanhSachPhong(RoomDAO dao) {
+        List<Room> list = dao.getAllRooms();
+        if (list.isEmpty()) {
+            System.out.println("Danh sách phòng hiện tại trống.");
+            return;
+        }
+        System.out.println("\n========================================================================================================================");
+        System.out.printf("%-5s %-15s %-20s %-12s %-12s %-40s%n", "ID", "Số phòng", "Loại phòng", "Giá/1 đêm (VND)", "Trạng thái", "Mô tả");
+        System.out.println("------------------------------------------------------------------------------------------------------------------------");
+        for (Room r : list) {
+            System.out.printf("%-5d %-15s %-20s %-12.2f %-12s %-40s%n",
+                    r.getId(), r.getRoomNumber(), r.getRoomType(),
+                    r.getPrice(), r.getStatus(), r.getDescription());
+        }
+        System.out.println("========================================================================================================================");
     }
 
-    // ========== QUẢN LÝ NHÂN VIÊN quyền admin (GIỮ NGUYÊN) ==========
+    
+    // private static void manageServiceBooking() {
+    //     System.out.println("Chức năng đặt dịch vụ (thêm/xóa) đang phát triển.");
+    // }
+
+    // private static void viewMyInvoices() {
+    //     System.out.println("Chức năng xem hóa đơn của tôi đang phát triển.");
+    // }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    // ========== QUẢN LÝ NHÂN VIÊN quyền admin ==========
     private static void manageEmployee() {
         NhanVienDAO dao = new NhanVienDAO();
         while (true) {
@@ -419,9 +615,9 @@ private static double getDoubleInput() {
     private static int getIntInput() {
         while (true) {
             try {
-                return Integer.parseInt(sc.nextLine());
+                return Integer.parseInt(sc.nextLine().trim());
             } catch (NumberFormatException e) {
-                System.out.print("Vui lòng nhập số hợp lệ: ");
+                System.out.print("Vui lòng nhập số nguyên hợp lệ: ");
             }
         }
     }
