@@ -1,0 +1,3 @@
+
+ java -cp ".;lib\mysql-connector-j-9.6.0.jar" project.Main
+javac -cp "lib\mysql-connector-j-9.6.0.jar" -d . project\model\*.java project\dao\*.java project\database\*.java project\*.java  
